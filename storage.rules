@@ -1,0 +1,72 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isRestaurantOwner(restaurantId) {
+      return isSignedIn()
+        && firestore.exists(
+          /databases/(default)/documents/restaurants/$(restaurantId)
+        )
+        && firestore.get(
+          /databases/(default)/documents/restaurants/$(restaurantId)
+        ).data.ownerId == request.auth.uid;
+    }
+
+    function isRestaurantMember(restaurantId) {
+      return isSignedIn()
+        && firestore.exists(
+          /databases/(default)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid)
+        )
+        && firestore.get(
+          /databases/(default)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid)
+        ).data.isActive == true
+        && firestore.get(
+          /databases/(default)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid)
+        ).data.get('status', 'active') != 'inactive';
+    }
+
+    function canAccessRestaurant(restaurantId) {
+      return isRestaurantOwner(restaurantId)
+        || isRestaurantMember(restaurantId);
+    }
+
+    function isValidImageUpload() {
+      return request.resource != null
+        && request.resource.size <= 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
+    // ============================================================
+    // DEFAULT DENY
+    // ============================================================
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // ============================================================
+    // RESTAURANT-SCOPED STORAGE
+    // ============================================================
+
+    match /restaurants/{restaurantId}/{allPaths=**} {
+      allow read: if canAccessRestaurant(restaurantId);
+
+      allow create: if canAccessRestaurant(restaurantId)
+        && isValidImageUpload();
+
+      allow update: if canAccessRestaurant(restaurantId)
+        && isValidImageUpload();
+
+      allow delete: if canAccessRestaurant(restaurantId);
+    }
+  }
+}

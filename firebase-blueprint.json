@@ -1,0 +1,355 @@
+{
+  "entities": {
+    "User": {
+      "collection": "users",
+      "fields": {
+        "userId": "string",
+        "displayName": "string",
+        "email": "string",
+        "photoUrl": "string | null",
+        "restaurantId": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "Restaurant": {
+      "collection": "restaurants",
+      "fields": {
+        "restaurantId": "string",
+        "name": "string",
+        "legalName": "string",
+        "logoUrl": "string | null",
+        "phone": "string",
+        "email": "string",
+        "address": "string",
+        "city": "string",
+        "state": "string",
+        "postalCode": "string",
+        "country": "string",
+        "gstNumber": "string",
+        "currency": "string",
+        "currencySymbol": "string",
+        "timezone": "string",
+        "taxMode": "string",
+        "defaultTaxRate": "number",
+        "ownerId": "string",
+        "isActive": "boolean",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "Category": {
+      "collection": "restaurants/{restaurantId}/categories",
+      "fields": {
+        "categoryId": "string",
+        "restaurantId": "string",
+        "name": "string",
+        "description": "string",
+        "imageUrl": "string | null",
+        "sortOrder": "number",
+        "isActive": "boolean",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "MenuItem": {
+      "collection": "restaurants/{restaurantId}/items",
+      "fields": {
+        "itemId": "string",
+        "restaurantId": "string",
+        "categoryId": "string",
+        "name": "string",
+        "shortName": "string",
+        "description": "string",
+        "imageUrl": "string | null",
+        "price": "number",
+        "taxRate": "number",
+        "taxInclusive": "boolean",
+        "foodType": "string",
+        "isAvailable": "boolean",
+        "sku": "string",
+        "sortOrder": "number",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "Table": {
+      "collection": "restaurants/{restaurantId}/tables",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "name": "string",
+        "tableNumber": "string",
+        "floorOrArea": "string",
+        "capacity": "number",
+        "isActive": "boolean",
+        "sortOrder": "number",
+        "createdBy": "string | null",
+        "updatedBy": "string | null",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "TableSession": {
+      "collection": "restaurants/{restaurantId}/tableSessions",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "tableId": "string",
+        "status": "string",
+        "guestCount": "number",
+        "openedAt": "timestamp",
+        "closedAt": "timestamp | null",
+        "activeOrderIds": "array",
+        "openedBy": "string",
+        "closedBy": "string | null",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "Order": {
+      "collection": "restaurants/{restaurantId}/orders",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "orderNumber": "string",
+        "tableId": "string | null",
+        "tableSessionId": "string | null",
+        "orderType": "string",
+        "source": "string",
+        "status": "string",
+        "items": "array",
+        "subtotalMinor": "number",
+        "discountMinor": "number",
+        "taxableAmountMinor": "number",
+        "cgstMinor": "number",
+        "sgstMinor": "number",
+        "igstMinor": "number",
+        "totalTaxMinor": "number",
+        "grandTotalMinor": "number",
+        "paidAmountMinor": "number",
+        "dueAmountMinor": "number",
+        "notes": "string | null",
+        "customerSnapshot": "object | null",
+        "cancellationReason": "string | null",
+        "cancelledAt": "timestamp | null",
+        "cancelledBy": "string | null",
+        "createdBy": "string",
+        "updatedBy": "string | null",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "KOT": {
+      "collection": "restaurants/{restaurantId}/kots",
+      "fields": {
+        "id": "string",
+        "kotNumber": "string",
+        "restaurantId": "string",
+        "orderId": "string",
+        "tableId": "string | null",
+        "tableSessionId": "string | null",
+        "items": "array",
+        "notes": "string | null",
+        "status": "string",
+        "cancellationReason": "string | null",
+        "cancelledAt": "timestamp | null",
+        "cancelledBy": "string | null",
+        "sentToKitchenAt": "timestamp | null",
+        "preparingAt": "timestamp | null",
+        "readyAt": "timestamp | null",
+        "servedAt": "timestamp | null",
+        "createdBy": "string",
+        "updatedBy": "string | null",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "Payment": {
+      "collection": "restaurants/{restaurantId}/payments",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "orderId": "string",
+        "amountMinor": "number",
+        "method": "string",
+        "status": "string",
+        "reference": "string | null",
+        "idempotencyKey": "string | null",
+        "createdBy": "string",
+        "createdAt": "timestamp"
+      }
+    },
+    "IdempotencyRecord": {
+      "collection": "restaurants/{restaurantId}/idempotency",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "operation": "string",
+        "requestSignature": "string",
+        "status": "string",
+        "targetEntityId": "string | null",
+        "responseSnapshot": "object | null",
+        "errorMessage": "string | null",
+        "createdBy": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "InventoryItem": {
+      "collection": "restaurants/{restaurantId}/inventoryItems",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "name": "string",
+        "normalizedName": "string",
+        "sku": "string | null",
+        "unit": "string",
+        "currentQuantity": "number",
+        "minimumQuantity": "number",
+        "reorderQuantity": "number | null",
+        "costPerUnitPaise": "number | null",
+        "status": "string",
+        "active": "boolean",
+        "createdBy": "string",
+        "updatedBy": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "StockMovement": {
+      "collection": "restaurants/{restaurantId}/stockMovements",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "inventoryItemId": "string",
+        "type": "string",
+        "quantity": "number",
+        "unit": "string",
+        "delta": "number",
+        "previousQuantity": "number",
+        "resultingQuantity": "number",
+        "reason": "string | null",
+        "note": "string | null",
+        "actorUid": "string",
+        "clientRequestId": "string | null",
+        "referenceType": "string | null",
+        "referenceId": "string | null",
+        "reversalOfMovementId": "string | null",
+        "reversedByMovementId": "string | null",
+        "createdAt": "timestamp"
+      }
+    },
+    "Supplier": {
+      "collection": "restaurants/{restaurantId}/suppliers",
+      "fields": {
+        "supplierId": "string",
+        "restaurantId": "string",
+        "name": "string",
+        "normalizedName": "string",
+        "phone": "string",
+        "email": "string | null",
+        "address": "string | null",
+        "gstNumber": "string | null",
+        "contactPerson": "string | null",
+        "notes": "string | null",
+        "active": "boolean",
+        "createdBy": "string",
+        "updatedBy": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "PurchaseOrder": {
+      "collection": "restaurants/{restaurantId}/purchaseOrders",
+      "fields": {
+        "purchaseOrderId": "string",
+        "orderNumber": "string",
+        "restaurantId": "string",
+        "supplierId": "string",
+        "supplierSnapshot": "object",
+        "status": "string",
+        "orderDate": "string",
+        "expectedDate": "string | null",
+        "items": "array",
+        "notes": "string | null",
+        "subtotalMinor": "number",
+        "taxMinor": "number",
+        "grandTotalMinor": "number",
+        "currency": "string",
+        "createdBy": "string",
+        "updatedBy": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp",
+        "clientRequestId": "string | null"
+      }
+    },
+    "PurchaseReceiving": {
+      "collection": "restaurants/{restaurantId}/purchaseReceivings",
+      "fields": {
+        "receivingId": "string",
+        "restaurantId": "string",
+        "purchaseOrderId": "string",
+        "orderNumber": "string",
+        "supplierId": "string",
+        "supplierName": "string",
+        "items": "array",
+        "notes": "string | null",
+        "actorUid": "string",
+        "clientRequestId": "string | null",
+        "createdAt": "timestamp"
+      }
+    },
+    "Recipe": {
+      "collection": "restaurants/{restaurantId}/recipes",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "menuItemId": "string",
+        "menuItemSnapshot": "object",
+        "version": "number",
+        "status": "string",
+        "ingredients": "array",
+        "notes": "string | null",
+        "estimatedCostPaise": "number | null",
+        "createdBy": "string",
+        "updatedBy": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "StockConsumption": {
+      "collection": "restaurants/{restaurantId}/stockConsumptions",
+      "fields": {
+        "id": "string",
+        "restaurantId": "string",
+        "orderId": "string",
+        "orderNumber": "string | null",
+        "orderItemId": "string | null",
+        "menuItemId": "string",
+        "menuItemNameSnapshot": "string | null",
+        "recipeId": "string",
+        "recipeVersion": "number",
+        "inventoryItemId": "string",
+        "inventoryItemNameSnapshot": "string | null",
+        "quantity": "number",
+        "unit": "string",
+        "recipeQuantity": "number",
+        "recipeUnit": "string",
+        "orderItemQuantity": "number",
+        "delta": "number",
+        "stockMovementId": "string",
+        "actorUid": "string",
+        "clientRequestId": "string | null",
+        "idempotencyKey": "string | null",
+        "status": "string",
+        "reversedAt": "timestamp | null",
+        "reversedBy": "string | null",
+        "reversalMovementId": "string | null",
+        "reversalReason": "string | null",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    }
+  }
+}

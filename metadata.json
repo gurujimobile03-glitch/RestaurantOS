@@ -1,0 +1,6 @@
+{
+  "name": "RestaurantOS",
+  "description": "Production-grade restaurant management platform and Web Admin Dashboard",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,425 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwnerOfRestaurant(restaurantId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/restaurants/$(restaurantId))
+        && get(/databases/$(database)/documents/restaurants/$(restaurantId)).data.ownerId == request.auth.uid;
+    }
+
+    function isMemberOfRestaurant(restaurantId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid)).data.isActive == true
+        && (
+          !('status' in get(/databases/$(database)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid)).data)
+          || get(/databases/$(database)/documents/restaurants/$(restaurantId)/members/$(request.auth.uid)).data.status != 'inactive'
+        );
+    }
+
+    function canAccessRestaurant(restaurantId) {
+      return isOwnerOfRestaurant(restaurantId) || isMemberOfRestaurant(restaurantId);
+    }
+
+    function getMemberData(restaurantId, userId) {
+      return get(/databases/$(database)/documents/restaurants/$(restaurantId)/members/$(userId)).data;
+    }
+
+    function getMemberRole(restaurantId) {
+      return getMemberData(restaurantId, request.auth.uid).role;
+    }
+
+    function isMemberWithRole(restaurantId, role) {
+      return isMemberOfRestaurant(restaurantId) && getMemberRole(restaurantId) == role;
+    }
+
+    function isMemberWithRoles(restaurantId, roles) {
+      return isMemberOfRestaurant(restaurantId) && getMemberRole(restaurantId) in roles;
+    }
+
+    // ============================================================
+    // USERS
+    // ============================================================
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // ============================================================
+    // COLLECTION-GROUP MEMBERSHIP DISCOVERY
+    // ============================================================
+    // Allows a signed-in user to discover their own active or pending
+    // membership/invitation records matching their UID or email.
+    match /{path=**}/members/{memberId} {
+      allow read: if isSignedIn()
+        && (
+          (resource.data.userId == request.auth.uid && resource.data.isActive == true)
+          || (('email' in resource.data) && resource.data.email == request.auth.token.email)
+        );
+    }
+
+    // ============================================================
+    // RESTAURANTS
+    // ============================================================
+
+    match /restaurants/{restaurantId} {
+      allow get: if isSignedIn() && (
+        resource == null ||
+        resource.data.ownerId == request.auth.uid ||
+        isMemberOfRestaurant(restaurantId)
+      );
+
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      allow create: if isSignedIn()
+        && request.resource.data.ownerId == request.auth.uid;
+
+      allow update: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid
+        && request.resource.data.ownerId == resource.data.ownerId;
+
+      allow delete: if isSignedIn()
+        && resource.data.ownerId == request.auth.uid;
+
+      // ==========================================================
+      // MEMBERS
+      // ==========================================================
+
+      match /members/{memberId} {
+        allow read: if isSignedIn() && (
+          isOwnerOfRestaurant(restaurantId) ||
+          isMemberWithRole(restaurantId, 'manager') ||
+          request.auth.uid == memberId ||
+          (('email' in resource.data) && resource.data.email == request.auth.token.email)
+        );
+
+        allow write: if isOwnerOfRestaurant(restaurantId) || (
+          isSignedIn() && (
+            request.auth.uid == memberId ||
+            (('email' in resource.data) && resource.data.email == request.auth.token.email)
+          )
+        );
+      }
+
+      // ==========================================================
+      // CATEGORIES
+      // ==========================================================
+
+      match /categories/{categoryId} {
+        allow read: if canAccessRestaurant(restaurantId);
+        allow write: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+      }
+
+      // ==========================================================
+      // MENU ITEMS
+      // ==========================================================
+
+      match /items/{itemId} {
+        allow read: if canAccessRestaurant(restaurantId);
+        allow write: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+      }
+
+      // ==========================================================
+      // TABLES
+      // ==========================================================
+
+      match /tables/{tableId} {
+        allow read: if canAccessRestaurant(restaurantId);
+
+        allow create, delete: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+
+        allow update: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager')
+          || (
+            isMemberWithRoles(restaurantId, ['cashier', 'captain'])
+            && request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['activeSessionId', 'updatedAt'])
+          );
+      }
+
+      // ==========================================================
+      // TABLE SESSIONS
+      // ==========================================================
+
+      match /tableSessions/{sessionId} {
+        allow read: if canAccessRestaurant(restaurantId);
+
+        allow create, update: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'cashier', 'captain']);
+
+        allow delete: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+      }
+
+      // ==========================================================
+      // ORDERS
+      // ==========================================================
+
+      match /orders/{orderId} {
+        allow read: if canAccessRestaurant(restaurantId);
+
+        allow create: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'cashier', 'captain']);
+
+        allow update: if isOwnerOfRestaurant(restaurantId)
+          || (
+            isMemberOfRestaurant(restaurantId)
+            && (
+              (
+                request.resource.data.status != 'cancelled'
+                && isMemberWithRoles(restaurantId, ['manager', 'cashier', 'captain'])
+              )
+              || (
+                request.resource.data.status == 'cancelled'
+                && isMemberWithRole(restaurantId, 'manager')
+              )
+            )
+          );
+
+        allow delete: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+      }
+
+      // ==========================================================
+      // KOTS
+      // ==========================================================
+
+      match /kots/{kotId} {
+        allow read: if canAccessRestaurant(restaurantId);
+
+        allow create: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'cashier', 'captain']);
+
+        allow update: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'kitchen', 'captain']);
+
+        allow delete: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+      }
+
+      // ==========================================================
+      // PAYMENTS
+      // ==========================================================
+
+      match /payments/{paymentId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'cashier', 'accountant']);
+
+        allow create: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'cashier']);
+
+        allow update: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+
+        allow delete: if isOwnerOfRestaurant(restaurantId);
+      }
+
+      // ==========================================================
+      // AUDIT LOGS — APPEND ONLY
+      // ==========================================================
+
+      match /auditLogs/{auditId} {
+        allow create: if canAccessRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId
+          && request.resource.data.actorUid == request.auth.uid;
+
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow update, delete: if false;
+      }
+
+      // ==========================================================
+      // DEVICES & OPERATIONAL REGISTRY
+      // ==========================================================
+
+      match /devices/{deviceId} {
+        allow read: if canAccessRestaurant(restaurantId);
+        allow create, update: if canAccessRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+        allow delete: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRole(restaurantId, 'manager');
+      }
+
+      // ==========================================================
+      // IDEMPOTENCY
+      // ==========================================================
+
+      match /idempotency/{key} {
+        allow read, write: if canAccessRestaurant(restaurantId);
+      }
+
+      match /idempotencyKeys/{key} {
+        allow read, write: if canAccessRestaurant(restaurantId);
+      }
+
+      // ==========================================================
+      // INVENTORY ITEMS
+      // ==========================================================
+
+      match /inventoryItems/{itemId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == restaurantId;
+
+        allow update: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwnerOfRestaurant(restaurantId);
+      }
+
+      // ==========================================================
+      // STOCK MOVEMENTS — IMMUTABLE APPEND ONLY
+      // ==========================================================
+
+      match /stockMovements/{movementId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == restaurantId
+          && request.resource.data.actorUid == request.auth.uid;
+
+        allow update, delete: if false; // Historical stock movements are strictly immutable
+      }
+
+      // ==========================================================
+      // SUPPLIERS
+      // ==========================================================
+
+      match /suppliers/{supplierId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == restaurantId;
+
+        allow update: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.supplierId == resource.data.supplierId;
+
+        allow delete: if isOwnerOfRestaurant(restaurantId);
+      }
+
+      // ==========================================================
+      // PURCHASE ORDERS
+      // ==========================================================
+
+      match /purchaseOrders/{purchaseOrderId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == restaurantId;
+
+        allow update: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.purchaseOrderId == resource.data.purchaseOrderId;
+
+        allow delete: if isOwnerOfRestaurant(restaurantId);
+      }
+
+      // ==========================================================
+      // PURCHASE RECEIVINGS — IMMUTABLE APPEND ONLY
+      // ==========================================================
+
+      match /purchaseReceivings/{receivingId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == restaurantId
+          && request.resource.data.actorUid == request.auth.uid;
+
+        allow update, delete: if false; // Historical receiving records are strictly immutable
+      }
+
+      // ==========================================================
+      // RECIPES (BOM)
+      // ==========================================================
+
+      match /recipes/{recipeId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == restaurantId;
+
+        allow update: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == resource.data.restaurantId
+          && request.resource.data.id == resource.data.id;
+
+        allow delete: if isOwnerOfRestaurant(restaurantId);
+      }
+
+      // ==========================================================
+      // STOCK CONSUMPTIONS — IMMUTABLE AUDIT LOG
+      // ==========================================================
+
+      match /stockConsumptions/{consumptionId} {
+        allow read: if isOwnerOfRestaurant(restaurantId)
+          || isMemberWithRoles(restaurantId, ['manager', 'accountant']);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRoles(restaurantId, ['manager', 'cashier', 'captain']))
+          && request.resource.data.restaurantId == restaurantId;
+
+        allow update: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == resource.data.restaurantId;
+
+        allow delete: if false; // Consumptions cannot be deleted to preserve audit trail
+      }
+
+      // ==========================================================
+      // PRINTERS & HARDWARE
+      // ==========================================================
+
+      match /printers/{printerId} {
+        allow read: if canAccessRestaurant(restaurantId);
+
+        allow create: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == restaurantId;
+
+        allow update: if (isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager'))
+          && request.resource.data.restaurantId == resource.data.restaurantId;
+
+        allow delete: if isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager');
+      }
+
+      match /printJobs/{jobId} {
+        allow read: if canAccessRestaurant(restaurantId);
+
+        allow create: if canAccessRestaurant(restaurantId)
+          && request.resource.data.restaurantId == restaurantId;
+
+        allow update: if canAccessRestaurant(restaurantId)
+          && request.resource.data.restaurantId == resource.data.restaurantId;
+
+        allow delete: if isOwnerOfRestaurant(restaurantId) || isMemberWithRole(restaurantId, 'manager');
+      }
+    }
+
+    // ============================================================
+    // DEFAULT DENY
+    // ============================================================
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
